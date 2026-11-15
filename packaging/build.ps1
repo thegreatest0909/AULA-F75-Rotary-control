@@ -1,4 +1,4 @@
-# Сборка AULA F75 Knob: портативный exe (PyInstaller) + установщик (Inno Setup 6).
+﻿# Сборка AULA F75 Knob: портативный exe (PyInstaller) + установщик (Inno Setup 6).
 #   powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -11,7 +11,6 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed `
     --icon 'assets\icon.ico' `
     --add-data 'ui;ui' `
     --add-data 'assets;assets' `
-    --add-data 'config.json;.' `
     --collect-all webview `
     app.py
 
