@@ -37,7 +37,7 @@ import core
 import winhook
 
 APP_NAME = "AULA F75 Knob"
-APP_VERSION = "1.0.2"
+APP_VERSION = "1.0.3"
 REPO_URL = "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(__file__).resolve().parent
@@ -48,6 +48,7 @@ CONFIG_PATH = DATA_DIR / "config.json"
 UI_INDEX = RESOURCE_DIR / "ui" / "index.html"
 APP_MUTEX_NAME = r"Local\AulaF75KnobApp.Mutex"
 APP_QUIT_EVENT = r"Local\AulaF75KnobApp.Quit"
+APP_SHOW_EVENT = r"Local\AulaF75KnobApp.Show"
 
 
 # --------------------------------------------------------------------- подготовка
@@ -116,13 +117,56 @@ def promote_tray_icon() -> bool:
         winreg.CloseKey(root)
     return changed
 
-def message_box(text: str, title: str = APP_NAME) -> None:
-    try:
-        import ctypes
+STARTUP_LINK_NAME = "AULA F75 Knob.lnk"
 
-        ctypes.windll.user32.MessageBoxW(0, text, title, 0x00000040)
-    except Exception:  # noqa: BLE001
-        print(f"{title}: {text}")
+
+def startup_link() -> Path:
+    appdata = Path(os.environ.get("APPDATA", str(Path.home())))
+    return appdata / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / STARTUP_LINK_NAME
+
+
+def autostart_enabled() -> bool:
+    try:
+        return startup_link().exists()
+    except OSError:
+        return False
+
+
+def _startup_target(minimized: bool) -> tuple[str, str, str]:
+    if FROZEN:
+        return (
+            sys.executable,
+            "--minimized" if minimized else "",
+            str(Path(sys.executable).parent),
+        )
+    pythonw = Path(sys.executable).with_name("pythonw.exe")
+    target = str(pythonw if pythonw.exists() else sys.executable)
+    arguments = f'"{BASE_DIR / "app.py"}"' + (" --minimized" if minimized else "")
+    return target, arguments, str(BASE_DIR)
+
+
+def set_autostart(enabled: bool, minimized: bool = True) -> None:
+    link = startup_link()
+    if not enabled:
+        try:
+            link.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    link.parent.mkdir(parents=True, exist_ok=True)
+    target, arguments, workdir = _startup_target(minimized)
+    import subprocess
+
+    script = (
+        f'$s=(New-Object -ComObject WScript.Shell).CreateShortcut("{link}");'
+        f"$s.TargetPath='{target}';$s.Arguments='{arguments}';"
+        f"$s.WorkingDirectory='{workdir}';$s.Save()"
+    )
+    subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+        check=True,
+        capture_output=True,
+    )
 
 
 # --------------------------------------------------------------------- мост JS ↔ Python
@@ -209,6 +253,12 @@ class Api:
             return self._core.clear_wallpaper()
         if route == "/api/wallpaper/desktop":
             return self._core.desktop_wallpaper()
+        if route == "/api/settings":
+            if self._app is None:
+                raise core.ApiError("Приложение ещё не готово")
+            if (method or "GET").upper() == "POST":
+                return {"ok": True, "settings": self._app.apply_settings(data)}
+            return {"ok": True, "settings": self._app.get_settings()}
         if route == "/api/quit":
             if self._app is not None:
                 self._app.request_quit()
@@ -269,7 +319,7 @@ class Application:
         except Exception as exc:  # noqa: BLE001
             self.api._core.journal.info(f"Сервис не запущен: {exc}")
         self._build_tray()
-        threading.Thread(target=self._watch_quit_event, name="quit-watch", daemon=True).start()
+        threading.Thread(target=self._watch_signals, name="app-watch", daemon=True).start()
         if self.smoke:
             threading.Thread(target=self._smoke_quit, name="smoke-quit", daemon=True).start()
 
@@ -277,29 +327,36 @@ class Application:
         time.sleep(3.0)
         self.request_quit()
 
-    def _watch_quit_event(self) -> None:
+    def _watch_signals(self) -> None:
+        """Следит за сигналами: показать окно (второй запуск) или выйти."""
         try:
-            event = winhook.create_event(APP_QUIT_EVENT)
+            quit_event = winhook.create_event(APP_QUIT_EVENT)
+            show_event = winhook.create_event(APP_SHOW_EVENT)
         except Exception:  # noqa: BLE001
             return
         try:
             while not self._quitting:
-                if winhook.event_is_set(event):
+                if winhook.event_is_set(quit_event):
                     self.request_quit()
                     return
-                time.sleep(0.2)
+                if winhook.event_is_set(show_event):
+                    winhook.reset_event(show_event)
+                    self.show()
+                time.sleep(0.15)
         finally:
-            winhook.close_handle(event)
+            winhook.close_handle(quit_event)
+            winhook.close_handle(show_event)
 
     def _on_closing(self) -> bool:
         if self._quitting:
             return True
-        self.hide()
-        return False
+        if bool(self.api._core.ui.get("close_to_tray", True)):
+            self.hide()
+            return False
+        self._shutdown_services()
+        return True
 
-    def request_quit(self) -> None:
-        if self._quitting:
-            return
+    def _shutdown_services(self) -> None:
         self._quitting = True
         try:
             self.api._core.service.stop()
@@ -308,9 +365,14 @@ class Application:
         if self.tray is not None:
             try:
                 self.tray.stop()
-                self.tray = None
             except Exception:  # noqa: BLE001
                 pass
+            self.tray = None
+
+    def request_quit(self) -> None:
+        if self._quitting:
+            return
+        self._shutdown_services()
         threading.Timer(0.25, self._destroy_window).start()
 
     def _destroy_window(self) -> None:
@@ -318,6 +380,29 @@ class Application:
             self.window.destroy()
         except Exception:  # noqa: BLE001
             pass
+
+    # ---------------------------------------------------------------- settings
+
+    def get_settings(self) -> dict[str, Any]:
+        ui = self.api._core.ui
+        return {
+            "autostart": autostart_enabled(),
+            "start_minimized": bool(ui.get("start_minimized", True)),
+            "close_to_tray": bool(ui.get("close_to_tray", True)),
+            "version": APP_VERSION,
+        }
+
+    def apply_settings(self, data: dict[str, Any]) -> dict[str, Any]:
+        ui = self.api._core.ui
+        if "start_minimized" in data:
+            ui["start_minimized"] = bool(data["start_minimized"])
+        if "close_to_tray" in data:
+            ui["close_to_tray"] = bool(data["close_to_tray"])
+        self.api._core._save_ui()
+        if "autostart" in data or "start_minimized" in data:
+            enabled = bool(data.get("autostart", autostart_enabled()))
+            set_autostart(enabled, bool(ui.get("start_minimized", True)))
+        return self.get_settings()
 
     # ---------------------------------------------------------------- window
 
@@ -422,6 +507,18 @@ def stop_running() -> bool:
         winhook.close_handle(handle)
 
 
+def show_running() -> bool:
+    """Просит уже запущенный экземпляр показать окно."""
+    try:
+        handle = winhook.create_event(APP_SHOW_EVENT)
+    except Exception:  # noqa: BLE001
+        return False
+    try:
+        return winhook.set_event(handle)
+    finally:
+        winhook.close_handle(handle)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app", description=APP_NAME)
     parser.add_argument("--minimized", action="store_true", help="запуститься свёрнутым в трей")
@@ -444,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.smoke:
             print("SMOKE SKIP: already running")
             return 0
-        message_box("Приложение уже запущено. Окно можно открыть из трея.")
+        show_running()
         return 0
 
     try:

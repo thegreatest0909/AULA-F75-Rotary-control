@@ -170,6 +170,8 @@ kernel32.OpenEventW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
 kernel32.OpenEventW.restype = ctypes.c_void_p
 kernel32.OpenMutexW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
 kernel32.OpenMutexW.restype = ctypes.c_void_p
+kernel32.ResetEvent.argtypes = [ctypes.c_void_p]
+kernel32.ResetEvent.restype = wintypes.BOOL
 kernel32.SetEvent.argtypes = [ctypes.c_void_p]
 kernel32.SetEvent.restype = wintypes.BOOL
 kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, wintypes.DWORD]
@@ -748,6 +750,10 @@ def event_is_set(handle) -> bool:
 
 def set_event(handle) -> bool:
     return bool(kernel32.SetEvent(handle))
+
+
+def reset_event(handle) -> bool:
+    return bool(kernel32.ResetEvent(handle))
 
 
 def signal_event(name: str) -> bool:

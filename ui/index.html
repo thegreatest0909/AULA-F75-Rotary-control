@@ -45,6 +45,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14"/><path d="M5 12h14"/><path d="M5 18h9"/></svg>
           Журнал
         </button>
+        <button class="nav-item" data-tab="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09A1.7 1.7 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1Z"/></svg>
+          Настройки
+        </button>
       </nav>
 
       <div class="sidebar-foot">
@@ -282,6 +286,59 @@
               добавьте размытие 4–8 px — текст станет заметно читаемее.
             </p>
           </div>
+        </article>
+      </section>
+
+      <section class="tab" data-tab="settings">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Запуск</h3>
+              <p class="muted small">Что делать при включении компьютера</p>
+            </div>
+          </div>
+          <label class="toggle-row">
+            <input type="checkbox" id="opt-autostart">
+            <span>
+              <strong>Запускать при входе в Windows</strong>
+              <small>Программа добавит себя в автозагрузку</small>
+            </span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" id="opt-start-minimized">
+            <span>
+              <strong>При автозапуске открываться свёрнутой в трей</strong>
+              <small>Если выключено — после включения ПК откроется окно программы</small>
+            </span>
+          </label>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Поведение окна</h3>
+              <p class="muted small">Что происходит при закрытии окна</p>
+            </div>
+          </div>
+          <label class="toggle-row">
+            <input type="checkbox" id="opt-close-to-tray">
+            <span>
+              <strong>Сворачивать в трей при закрытии</strong>
+              <small>Если выключено — крестик полностью завершает программу</small>
+            </span>
+          </label>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>О программе</h3>
+              <p class="muted small">AULA F75 Knob <span id="settings-version"></span></p>
+            </div>
+            <button class="button ghost small" id="settings-quit">Выход</button>
+          </div>
+          <p class="muted small">Повторный запуск программы открывает уже работающее окно из трея.</p>
+          <p class="muted small">https://github.com/thegreatest0909/AULA-F75-Rotary-control</p>
         </article>
       </section>
 

@@ -18,6 +18,7 @@ const state = {
   draggingUntil: 0,
   masterDraggingUntil: 0,
   audioError: null,
+  settings: {},
 };
 
 const BINDINGS = [
@@ -82,6 +83,7 @@ const PAGES = {
   bindings: ['Привязки', 'Любое действие на вращение, нажатие и удержание.'],
   appearance: ['Оформление', 'Свои обои и акцентный цвет меню.'],
   log: ['Журнал', 'События ручки и сервиса.'],
+  settings: ['Настройки', 'Запуск, трей и поведение окна.'],
 };
 
 const esc = (value) =>
@@ -334,6 +336,30 @@ function renderUiControls() {
   $$('.accent').forEach((button) => {
     button.classList.toggle('active', button.dataset.accent === (ui.accent || 'violet'));
   });
+}
+
+function renderSettings() {
+  const settings = state.settings || {};
+  const autostart = $('#opt-autostart');
+  const minimized = $('#opt-start-minimized');
+  const closeToTray = $('#opt-close-to-tray');
+  if (autostart) autostart.checked = Boolean(settings.autostart);
+  if (minimized) minimized.checked = settings.start_minimized !== false;
+  if (closeToTray) closeToTray.checked = settings.close_to_tray !== false;
+  const version = $('#settings-version');
+  if (version) version.textContent = settings.version || '';
+}
+
+async function saveSetting(key, value) {
+  try {
+    const data = await api('/api/settings', { method: 'POST', body: { [key]: value } });
+    state.settings = data.settings || {};
+    renderSettings();
+    toast('Настройка сохранена');
+  } catch (error) {
+    toast(error.message, 'error');
+    renderSettings();
+  }
 }
 
 let uiTimer = 0;
@@ -1074,6 +1100,22 @@ function wire() {
     });
   });
 
+  ['autostart', 'start-minimized', 'close-to-tray'].forEach((name) => {
+    const element = $(`#opt-${name}`);
+    if (!element) return;
+    element.addEventListener('change', () => {
+      saveSetting(name.replace(/-/g, '_'), element.checked);
+    });
+  });
+
+  const settingsQuit = $('#settings-quit');
+  if (settingsQuit) {
+    settingsQuit.addEventListener('click', () => {
+      const quit = $('#quit');
+      if (quit) quit.click();
+    });
+  }
+
   $('#quit').addEventListener('click', async () => {
     if (!window.confirm('Закрыть меню и остановить сервис ручки?')) return;
     try {
@@ -1108,6 +1150,13 @@ async function init() {
     renderService();
     renderTarget();
     renderBindings();
+    try {
+      const settingsData = await api('/api/settings');
+      state.settings = settingsData.settings || {};
+    } catch (error) {
+      /* настройки не критичны */
+    }
+    renderSettings();
     const initial = (location.hash || '').replace('#', '');
     switchTab(initial);
   } catch (error) {
