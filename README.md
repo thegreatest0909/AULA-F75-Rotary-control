@@ -38,7 +38,7 @@ Shift + вращение → предыдущий/следующий трек (�
 
 ## Установка
 
-1. Скачайте `AULA-F75-Knob-Setup-1.0.0.exe` со страницы
+1. Скачайте `AULA-F75-Knob-Setup-1.0.1.exe` со страницы
    [Releases](https://github.com/thegreatest0909/AULA-F75-Rotary-control/releases).
 2. Запустите его — установка идёт в профиль пользователя
    (`%LOCALAPPDATA%\Programs\AULA F75 Knob`), права администратора не нужны.
@@ -304,7 +304,7 @@ powershell -ExecutionPolicy Bypass -File packaging\build.ps1
 Результат:
 
 - `dist\AULA F75 Knob.exe` — портативная программа;
-- `packaging\Output\AULA-F75-Knob-Setup-1.0.0.exe` — установщик для профиля
+- `packaging\Output\AULA-F75-Knob-Setup-1.0.1.exe` — установщик для профиля
   пользователя (без прав администратора).
 
 ## Файлы

@@ -1,4 +1,4 @@
-# Python
+﻿# Python
 __pycache__/
 *.py[cod]
 *.pyo
@@ -20,3 +20,7 @@ venv/
 build/
 dist/
 packaging/Output/
+
+# Исходное фото для иконки и сгенерированный spec не публикуются
+da8d8971-*.png
+*.spec

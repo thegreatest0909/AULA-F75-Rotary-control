@@ -1,8 +1,8 @@
-; Установщик AULA F75 Knob (Inno Setup 6).
+﻿; Установщик AULA F75 Knob (Inno Setup 6).
 ; Собирается из packaging\build.ps1: ISCC packaging\installer.iss
 
 #define MyAppName "AULA F75 Knob"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "thegreatest0909"
 #define MyAppURL "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 #define MyAppExeName "AULA F75 Knob.exe"
