@@ -1,46 +1,47 @@
-{
-  "knob": {
-    "suppress": true,
-    "hold_ms": 500,
-    "merge_rotation_ms": 0,
-    "second_layer_modifier": "shift",
-    "rotate_left_keys": [
-      "volume down"
-    ],
-    "rotate_right_keys": [
-      "volume up"
-    ],
-    "press_keys": [
-      "volume mute",
-      "play/pause"
-    ]
-  },
-  "cooldown_ms": 0,
-  "log_file": null,
-  "bindings": {
-    "rotate_left": {
-      "type": "volume",
-      "delta": -1
-    },
-    "rotate_right": {
-      "type": "volume",
-      "delta": 1
-    },
-    "press": {
-      "type": "media",
-      "action": "play_pause"
-    },
-    "hold": {
-      "type": "media",
-      "action": "mute"
-    },
-    "held_rotate_left": {
-      "type": "media",
-      "action": "prev"
-    },
-    "held_rotate_right": {
-      "type": "media",
-      "action": "next"
-    }
-  }
+﻿{
+    "knob":  {
+                 "suppress":  true,
+                 "hold_ms":  500,
+                 "merge_rotation_ms":  0,
+                 "rotate_left_keys":  [
+                                          "volume down"
+                                      ],
+                 "rotate_right_keys":  [
+                                           "volume up"
+                                       ],
+                 "press_keys":  [
+                                    "volume mute",
+                                    "play/pause"
+                                ],
+                 "second_layer_modifier":  "shift"
+             },
+    "cooldown_ms":  0,
+    "log_file":  null,
+    "bindings":  {
+                     "rotate_left":  {
+                                         "type":  "volume",
+                                         "delta":  -1
+                                     },
+                     "rotate_right":  {
+                                          "type":  "volume",
+                                          "delta":  1
+                                      },
+                     "press":  {
+                                   "type":  "media",
+                                   "action":  "play_pause"
+                               },
+                     "hold":  {
+                                  "type":  "media",
+                                  "action":  "mute"
+                              },
+                     "held_rotate_left":  {
+                                              "type":  "media",
+                                              "action":  "prev"
+                                          },
+                     "held_rotate_right":  {
+                                               "type":  "media",
+                                               "action":  "next"
+                                           }
+                 }
 }
+

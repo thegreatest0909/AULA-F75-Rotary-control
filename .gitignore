@@ -15,3 +15,8 @@ wallpapers/*
 # Виртуальные окружения
 .venv/
 venv/
+
+# Сборка
+build/
+dist/
+packaging/Output/

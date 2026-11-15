@@ -111,7 +111,18 @@ function toast(message, kind = 'ok') {
 }
 
 async function api(path, options = {}) {
-  const opts = { method: options.method || 'GET', headers: {} };
+  const method = (options.method || 'GET').toUpperCase();
+  const body = options.body !== undefined ? options.body : null;
+  // В нативном окне (pywebview) общаемся через мост, без HTTP и портов.
+  if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.request === 'function') {
+    const data = await window.pywebview.api.request(method, path, body);
+    if (!data || data.ok === false) {
+      throw new Error((data && data.error) || 'Ошибка приложения');
+    }
+    return data;
+  }
+  // Резервный режим: страница открыта в браузере рядом с локальным сервером.
+  const opts = { method, headers: {} };
   if (options.body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(options.body);
@@ -281,7 +292,11 @@ function switchTab(name) {
   $('#page-title').textContent = title;
   $('#page-subtitle').textContent = subtitle;
   if (location.hash !== `#${name}`) {
-    history.replaceState(null, '', `#${name}`);
+    try {
+      history.replaceState(null, '', `#${name}`);
+    } catch (error) {
+      location.hash = name;
+    }
   }
   const main = $('.main');
   if (main) main.scrollTop = 0;
@@ -833,17 +848,32 @@ async function uploadWallpaper(file) {
   const hint = $('#wallpaper-hint');
   hint.textContent = 'Загружаю…';
   try {
-    const response = await fetch('/api/wallpaper', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/octet-stream' },
-      body: file,
-    });
-    const data = await response.json();
-    if (!response.ok || data.ok === false) {
-      throw new Error(data.error || 'Не удалось загрузить обои');
+    let data;
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.upload_wallpaper) {
+      const buffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      data = await window.pywebview.api.upload_wallpaper(file.name, btoa(binary));
+    } else {
+      const response = await fetch('/api/wallpaper', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file,
+      });
+      data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось загрузить обои');
+      }
+    }
+    if (!data || data.ok === false) {
+      throw new Error((data && data.error) || 'Не удалось загрузить обои');
     }
     state.ui = data.ui;
-    state.wallpaperUrl = `${data.url}&t=${Date.now()}`;
+    state.wallpaperUrl = data.url || null;
     applyUi();
     hint.textContent = 'Обои обновлены. Настройте затемнение и размытие ниже.';
     toast('Обои применены');
@@ -1090,4 +1120,17 @@ async function init() {
   setInterval(pollLog, 1400);
 }
 
-init();
+function boot() {
+  if (window.__aulaBooted) return;
+  window.__aulaBooted = true;
+  init();
+}
+
+if (window.pywebview && window.pywebview.api) {
+  boot();
+} else {
+  window.addEventListener('pywebviewready', boot, { once: true });
+  setTimeout(() => {
+    if (!window.__aulaBooted && !window.pywebview) boot();
+  }, 1200);
+}
