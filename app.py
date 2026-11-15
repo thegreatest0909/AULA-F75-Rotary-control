@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """AULA F75 Knob — нативное приложение с прежним тёмным «стеклянным» меню.
 
 Интерфейс — тот же HTML/CSS, что и раньше, но он открывается во встроенном
@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import winreg
 import base64
 import json
 import os
@@ -36,7 +37,7 @@ import core
 import winhook
 
 APP_NAME = "AULA F75 Knob"
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.2"
 REPO_URL = "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(__file__).resolve().parent
@@ -69,6 +70,51 @@ def ensure_config() -> None:
         data = json.loads(json.dumps(DEFAULT_CONFIG))
     CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
+
+def _reg_value(key: Any, name: str, default: Any) -> Any:
+    try:
+        return winreg.QueryValueEx(key, name)[0]
+    except OSError:
+        return default
+
+
+def promote_tray_icon() -> bool:
+    """Разрешает показ значка в трее (Windows 11 по умолчанию скрывает новые)."""
+    try:
+        root = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Control Panel\NotifyIconSettings",
+            0,
+            winreg.KEY_READ | winreg.KEY_WRITE,
+        )
+    except OSError:
+        return False
+    changed = False
+    try:
+        index = 0
+        while True:
+            try:
+                name = winreg.EnumKey(root, index)
+            except OSError:
+                break
+            index += 1
+            try:
+                sub = winreg.OpenKey(root, name, 0, winreg.KEY_READ | winreg.KEY_WRITE)
+            except OSError:
+                continue
+            try:
+                tooltip = _reg_value(sub, "InitialTooltip", "")
+                executable = str(_reg_value(sub, "ExecutablePath", "")).lower()
+                if tooltip != APP_NAME and "aula f75 knob" not in executable:
+                    continue
+                if _reg_value(sub, "IsPromoted", 0) != 1:
+                    winreg.SetValueEx(sub, "IsPromoted", 0, winreg.REG_DWORD, 1)
+                    changed = True
+            finally:
+                winreg.CloseKey(sub)
+    finally:
+        winreg.CloseKey(root)
+    return changed
 
 def message_box(text: str, title: str = APP_NAME) -> None:
     try:
@@ -308,18 +354,58 @@ class Application:
         if icon_path is None:
             return
         try:
-            image = Image.open(icon_path)
-            menu = pystray.Menu(
-                pystray.MenuItem("Открыть", lambda: self.show(), default=True),
-                pystray.MenuItem("Скрыть", lambda: self.hide()),
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Выход", lambda: self.request_quit()),
+            self._tray_image = Image.open(icon_path)
+        except Exception as exc:  # noqa: BLE001
+            self.api._core.journal.info(f"Иконка трея недоступна: {exc}")
+            return
+        self._tray_pystray = pystray
+        self._start_tray()
+        # Windows 11 по умолчанию прячет новые значки в «скрытые». Включаем показ.
+        threading.Thread(target=self._promote_tray, name="tray-promote", daemon=True).start()
+
+    def _start_tray(self) -> None:
+        if self._tray_image is None or self._tray_pystray is None:
+            return
+        try:
+            menu = self._tray_pystray.Menu(
+                self._tray_pystray.MenuItem("Открыть", lambda _i, _it: self.show(), default=True),
+                self._tray_pystray.MenuItem("Скрыть", lambda _i, _it: self.hide()),
+                self._tray_pystray.Menu.SEPARATOR,
+                self._tray_pystray.MenuItem("Выход", lambda _i, _it: self.request_quit()),
             )
-            self.tray = pystray.Icon("aula-f75-knob", image, APP_NAME, menu)
+            self.tray = self._tray_pystray.Icon("aula-f75-knob", self._tray_image, APP_NAME, menu)
             threading.Thread(target=self.tray.run, name="tray", daemon=True).start()
         except Exception as exc:  # noqa: BLE001
             self.api._core.journal.info(f"Трей недоступен: {exc}")
             self.tray = None
+
+    def _promote_tray(self) -> None:
+        """Делает значок видимым в трее Windows 11 (иначе он в «скрытых»)."""
+        changed = False
+        # Windows может создать запись о значке с задержкой — ждём до ~25 секунд.
+        for _ in range(25):
+            time.sleep(1.0)
+            if self._quitting:
+                return
+            try:
+                changed = promote_tray_icon()
+            except Exception:  # noqa: BLE001
+                continue
+            if changed:
+                break
+        if not changed or self._quitting:
+            return
+        # Пересоздаём значок, чтобы Проводник перечитал настройку видимости.
+        time.sleep(0.3)
+        old = self.tray
+        self.tray = None
+        if old is not None:
+            try:
+                old.stop()
+            except Exception:  # noqa: BLE001
+                pass
+        time.sleep(0.2)
+        self._start_tray()
 
 
 # --------------------------------------------------------------------- запуск
