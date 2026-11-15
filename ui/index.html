@@ -1,0 +1,306 @@
+﻿<!doctype html>
+<html lang="ru" data-accent="violet">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AULA F75 Knob</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="bg" id="bg"></div>
+  <div class="bg-tint"></div>
+  <div class="veil" id="veil"></div>
+
+  <div class="shell">
+    <aside class="sidebar glass">
+      <div class="brand">
+        <div class="brand-mark">
+          <span class="brand-ring"></span>
+          <span class="brand-dot"></span>
+        </div>
+        <div>
+          <div class="brand-name">AULA F75</div>
+          <div class="brand-sub">Knob studio</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-tab="home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+          Обзор
+        </button>
+        <button class="nav-item" data-tab="volume">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4Z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+          Громкость
+        </button>
+        <button class="nav-item" data-tab="bindings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M11 17h9"/><circle cx="9" cy="17" r="2"/></svg>
+          Привязки
+        </button>
+        <button class="nav-item" data-tab="appearance">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m4 18 5.2-5.2a2 2 0 0 1 2.8 0L20 20"/></svg>
+          Оформление
+        </button>
+        <button class="nav-item" data-tab="log">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14"/><path d="M5 12h14"/><path d="M5 18h9"/></svg>
+          Журнал
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <div class="service-card">
+          <div class="service-line">
+            <span class="dot" id="service-dot"></span>
+            <span id="service-text">Сервис остановлен</span>
+          </div>
+          <button class="button tiny wide" id="service-toggle">Запустить</button>
+          <div class="service-note" id="service-note"></div>
+        </div>
+        <button class="quit-link" id="quit">Закрыть меню</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">AULA F75 · Rotary control</div>
+          <h1 id="page-title">Обзор</h1>
+          <p class="muted" id="page-subtitle">Одна ручка — и весь звук под контролем.</p>
+        </div>
+        <div class="top-actions">
+          <div class="mini-stat glass">
+            <span class="mini-label">Цель ручки</span>
+            <strong id="top-target">Система</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="tab active" data-tab="home">
+        <div class="hero glass">
+          <div class="hero-copy">
+            <div class="eyebrow">Ваша ручка. Ваши правила.</div>
+            <h2>Звук только там,<br><span class="gradient-text">где он нужен</span></h2>
+            <p class="muted">
+              Назначьте приложение — и ручка будет менять громкость только его.
+              Discord, браузер или игра продолжат звучать как обычно.
+            </p>
+            <div class="row">
+              <button class="button primary" data-goto="volume">Выбрать приложение</button>
+              <button class="button ghost" data-goto="bindings">Настроить действия</button>
+            </div>
+          </div>
+          <div class="knob-stage">
+            <div class="knob-aura"></div>
+            <div class="knob-ring"></div>
+            <div class="knob">
+              <span class="knob-notch"></span>
+              <span class="knob-core"></span>
+            </div>
+            <div class="knob-caption" id="hero-caption">Системная громкость</div>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Текущая цель</h3>
+                <p class="muted small">Что меняется вращением ручки</p>
+              </div>
+              <span class="pill" id="home-type">Система</span>
+            </div>
+            <div class="target-preview">
+              <div class="target-app-name" id="home-target">Системная громкость</div>
+              <div class="target-meta" id="home-step">Шаг 2% за щелчок</div>
+            </div>
+            <button class="button ghost wide" data-goto="volume">Изменить цель</button>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <div>
+                <h3>Быстрый старт</h3>
+                <p class="muted small">Три шага до полного контроля</p>
+              </div>
+            </div>
+            <ol class="steps">
+              <li><span>1</span> Выберите приложение во вкладке «Громкость».</li>
+              <li><span>2</span> Нажмите «Применить к ручке».</li>
+              <li><span>3</span> Крутите ручку — остальные приложения не тронуты.</li>
+            </ol>
+          </article>
+        </div>
+
+        <article class="card hint-card">
+          <div class="hint-icon">i</div>
+          <div>
+            <h3>Если приложение молчит</h3>
+            <p class="muted">
+              Windows создаёт аудиосессию, когда приложение хотя бы раз воспроизводило звук.
+              Запустите видео или музыку — приложение появится в списке, и ручка сразу его подхватит.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab" data-tab="volume">
+        <article class="card target-card">
+          <div class="card-head">
+            <div>
+              <h3>Что регулирует ручка</h3>
+              <p class="muted small">Остальные приложения и системная громкость остаются нетронутыми</p>
+            </div>
+            <span class="pill" id="target-badge">Система</span>
+          </div>
+
+          <div class="form-grid">
+            <label class="field">
+              <span>Приложение</span>
+              <input id="target-app" list="app-list" placeholder="Например, chrome.exe" autocomplete="off" spellcheck="false">
+              <small>Оставьте пустым, чтобы управлять системной громкостью</small>
+            </label>
+            <label class="field">
+              <span>Шаг за щелчок <output id="target-step-value">2%</output></span>
+              <input id="target-step" type="range" min="1" max="10" step="1" value="2">
+              <small>Вращение меняет громкость выбранного приложения</small>
+            </label>
+          </div>
+          <datalist id="app-list"></datalist>
+
+          <label class="check">
+            <input type="checkbox" id="target-mute">
+            <span class="check-box"></span>
+            Нажатие ручки — mute выбранного приложения
+          </label>
+
+          <div class="row">
+            <button class="button primary" id="target-apply">Применить к ручке</button>
+            <button class="button ghost" id="target-system">Системная громкость</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Приложения со звуком</h3>
+              <p class="muted small">Живые аудиосессии Windows</p>
+            </div>
+            <button class="icon-button" id="apps-refresh" title="Обновить">↻</button>
+          </div>
+          <div class="app-rows" id="app-rows">
+            <div class="empty">Загружаю аудиосессии…</div>
+          </div>
+        </article>
+
+        <article class="card master-card">
+          <div class="card-head">
+            <div>
+              <h3>Системная громкость</h3>
+              <p class="muted small">Общая громкость Windows</p>
+            </div>
+            <span class="pill" id="master-value">—</span>
+          </div>
+          <div class="master-row">
+            <input id="master-slider" type="range" min="0" max="100" value="50">
+            <button class="button ghost small" id="master-mute">Mute</button>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab" data-tab="bindings">
+        <article class="card bindings-card">
+          <div class="card-head sticky-head">
+            <div>
+              <h3>Действия ручки</h3>
+              <p class="muted small">Вращение, нажатие, удержание и второй слой (вращение с Shift)</p>
+            </div>
+            <div class="row">
+              <span class="save-state" id="bindings-state"></span>
+              <button class="button ghost small" id="bindings-reload">Отменить</button>
+              <button class="button primary small" id="bindings-save">Сохранить</button>
+            </div>
+          </div>
+          <div class="binding-list" id="binding-list"></div>
+          <div class="binding-error" id="bindings-error" hidden></div>
+        </article>
+      </section>
+
+      <section class="tab" data-tab="appearance">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Обои меню</h3>
+              <p class="muted small">Своя картинка для этого окна — PNG, JPG, WEBP, GIF или BMP</p>
+            </div>
+          </div>
+          <div class="dropzone" id="dropzone" tabindex="0" role="button">
+            <input type="file" id="wallpaper-file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden>
+            <div class="drop-icon">⇧</div>
+            <div class="drop-title">Перетащите обои сюда</div>
+            <div class="drop-sub">или нажмите, чтобы выбрать файл</div>
+            <div class="drop-hint" id="wallpaper-hint">До 30 МБ · картинка сразу появится на фоне меню</div>
+          </div>
+          <div class="row">
+            <button class="button ghost small" id="wallpaper-clear">Убрать обои</button>
+            <button class="button ghost small" id="wallpaper-desktop">Поставить на рабочий стол</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Настройка фона</h3>
+              <p class="muted small">Чтобы интерфейс оставался читаемым</p>
+            </div>
+          </div>
+          <div class="slider-row">
+            <label for="dim">Затемнение</label>
+            <input id="dim" type="range" min="0" max="90" value="42">
+            <output id="dim-value">42%</output>
+          </div>
+          <div class="slider-row">
+            <label for="blur">Размытие</label>
+            <input id="blur" type="range" min="0" max="30" value="0">
+            <output id="blur-value">0 px</output>
+          </div>
+          <div class="accent-row">
+            <span>Акцент</span>
+            <button class="accent violet" data-accent="violet" title="Фиолетовый"></button>
+            <button class="accent cyan" data-accent="cyan" title="Голубой"></button>
+            <button class="accent lime" data-accent="lime" title="Лаймовый"></button>
+            <button class="accent rose" data-accent="rose" title="Розовый"></button>
+            <button class="accent amber" data-accent="amber" title="Янтарный"></button>
+          </div>
+        </article>
+
+        <article class="card hint-card">
+          <div class="hint-icon">✦</div>
+          <div>
+            <h3>Совет</h3>
+            <p class="muted">
+              Для тёмных обоев подойдёт затемнение 30–50%. Если картинка пёстрая,
+              добавьте размытие 4–8 px — текст станет заметно читаемее.
+            </p>
+          </div>
+        </article>
+      </section>
+
+      <section class="tab" data-tab="log">
+        <article class="card log-card">
+          <div class="card-head">
+            <div>
+              <h3>Журнал</h3>
+              <p class="muted small">Что делает ручка и сервис</p>
+            </div>
+            <button class="button ghost small" id="log-clear">Очистить вид</button>
+          </div>
+          <pre id="log" class="log" data-placeholder="1">Пока пусто. Покрутите ручку — здесь появятся события.</pre>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

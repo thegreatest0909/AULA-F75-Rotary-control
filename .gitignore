@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Логи и временные файлы
+*.log
+*.tmp
+
+# Личные настройки интерфейса и обои не публикуются
+ui.json
+wallpapers/*
+!wallpapers/.gitkeep
+
+# Виртуальные окружения
+.venv/
+venv/
