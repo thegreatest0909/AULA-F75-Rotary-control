@@ -24,6 +24,12 @@ Shift + вращение → предыдущий/следующий трек (�
 > Модификатор настраивается в `knob.second_layer_modifier` (`shift`, `ctrl`,
 > `alt` или `none`).
 
+## Скриншоты
+
+![AULA F75 Knob — обзор](docs/screenshot.png)
+
+![AULA F75 Knob — настройки](docs/settings.png)
+
 ## Возможности
 
 - Громкость и mute **только выбранного приложения** через Windows Core Audio —
