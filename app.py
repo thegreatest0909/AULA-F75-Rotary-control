@@ -37,7 +37,7 @@ import core
 import winhook
 
 APP_NAME = "AULA F75 Knob"
-APP_VERSION = "1.0.5"
+APP_VERSION = "1.0.6"
 REPO_URL = "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(__file__).resolve().parent

@@ -1,5 +1,13 @@
 {
   "wallpapers": [
+    { "file": "night_sakura.jpg", "title": "Ночная сакура" },
+    { "file": "sakura_castle.jpg", "title": "Замок в сакуре" },
+    { "file": "pink_sakura.jpg", "title": "Розовая сакура" },
+    { "file": "neon_gtr.jpg", "title": "Неоновый GT-R" },
+    { "file": "white_skyline.jpg", "title": "Белый Skyline" },
+    { "file": "dark_lady.jpg", "title": "Тёмная леди" },
+    { "file": "glitch.jpg", "title": "Глитч" },
+    { "file": "midnight.jpg", "title": "Полночь" },
     { "file": "aurora.jpg", "title": "Аврора" },
     { "file": "dusk.jpg", "title": "Сумерки" },
     { "file": "ocean.jpg", "title": "Океан" },
