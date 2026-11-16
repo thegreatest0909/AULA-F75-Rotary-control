@@ -6,12 +6,13 @@ const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selec
 const state = {
   config: { bindings: {} },
   configHash: '',
-  ui: { dim: 42, blur: 0, accent: 'violet', wallpaper: null },
+  ui: { dim: 42, blur: 0, accent: 'violet', wallpaper: null, wallpaper_builtin: null, wallpaper_fit: 'contain' },
   service: { running: false, external: false, error: null },
   apps: [],
   master: null,
   target: { app: '', step: 2, isVolume: true, action: null },
   wallpaperUrl: null,
+  builtinWallpapers: [],
   bindingsDirty: false,
   savingBindings: false,
   logCursor: 0,
@@ -330,10 +331,20 @@ function applyUi() {
   document.documentElement.style.setProperty('--dim', String((num(ui.dim, 42) / 100).toFixed(3)));
   document.documentElement.style.setProperty('--blur', `${num(ui.blur, 0)}px`);
   const background = $('#bg');
+  const photo = $('#bg-photo');
   if (state.wallpaperUrl) {
     background.style.backgroundImage = `url("${state.wallpaperUrl}")`;
+    if (photo) {
+      photo.style.setProperty('--wallpaper', `url("${state.wallpaperUrl}")`);
+      photo.dataset.fit = ui.wallpaper_fit === 'cover' ? 'cover' : 'contain';
+      photo.classList.add('on');
+    }
   } else {
     background.style.backgroundImage = '';
+    if (photo) {
+      photo.classList.remove('on');
+      photo.style.removeProperty('--wallpaper');
+    }
   }
   renderUiControls();
 }
@@ -352,6 +363,8 @@ function renderUiControls() {
   }
   if (dim) paintRange(dim);
   if (blur) paintRange(blur);
+  const fit = $('#wallpaper-fit');
+  if (fit) fit.value = ui.wallpaper_fit === 'cover' ? 'cover' : 'contain';
   $$('.accent').forEach((button) => {
     button.classList.toggle('active', button.dataset.accent === (ui.accent || 'violet'));
   });
@@ -401,7 +414,7 @@ function queueUiSave() {
     try {
       await api('/api/ui', {
         method: 'POST',
-        body: { dim: state.ui.dim, blur: state.ui.blur, accent: state.ui.accent },
+        body: { dim: state.ui.dim, blur: state.ui.blur, accent: state.ui.accent, wallpaper_fit: state.ui.wallpaper_fit },
       });
     } catch (error) {
       toast(error.message, 'error');
@@ -1036,6 +1049,7 @@ async function uploadWallpaper(file) {
     state.ui = data.ui;
     state.wallpaperUrl = data.url || null;
     applyUi();
+    renderWallpaperLibrary();
     hint.textContent = 'Обои обновлены. Настройте затемнение и размытие ниже.';
     toast('Обои применены');
   } catch (error) {
@@ -1050,8 +1064,49 @@ async function clearWallpaper() {
     state.ui = data.ui;
     state.wallpaperUrl = null;
     applyUi();
+    renderWallpaperLibrary();
     $('#wallpaper-hint').textContent = 'Обои убраны. Можно выбрать новую картинку.';
     toast('Обои убраны');
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+function renderWallpaperLibrary() {
+  const host = $('#wallpaper-library');
+  if (!host) return;
+  const items = Array.isArray(state.builtinWallpapers) ? state.builtinWallpapers : [];
+  host.innerHTML = '';
+  if (!items.length) {
+    host.innerHTML = '<p class="muted small">Библиотека недоступна.</p>';
+    return;
+  }
+  const activeFile = state.ui.wallpaper ? null : state.ui.wallpaper_builtin || null;
+  items.forEach((item) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'wallpaper-item';
+    button.style.backgroundImage = `url("${item.url}")`;
+    button.title = item.title || item.file;
+    button.setAttribute('aria-pressed', activeFile === item.file ? 'true' : 'false');
+    button.classList.toggle('active', activeFile === item.file);
+    const label = document.createElement('span');
+    label.textContent = item.title || item.file;
+    button.appendChild(label);
+    button.addEventListener('click', () => applyBuiltinWallpaper(item.file));
+    host.appendChild(button);
+  });
+}
+
+async function applyBuiltinWallpaper(file) {
+  try {
+    const data = await api('/api/wallpaper/builtin', { method: 'POST', body: { file } });
+    state.ui = data.ui || state.ui;
+    state.wallpaperUrl = data.url || null;
+    applyUi();
+    renderWallpaperLibrary();
+    $('#wallpaper-hint').textContent = 'Обои из библиотеки применены. Настройте затемнение и размытие ниже.';
+    toast('Обои применены');
   } catch (error) {
     toast(error.message, 'error');
   }
@@ -1232,6 +1287,15 @@ function wire() {
   $('#wallpaper-clear').addEventListener('click', clearWallpaper);
   $('#wallpaper-desktop').addEventListener('click', setDesktopWallpaper);
 
+  const wallpaperFit = $('#wallpaper-fit');
+  if (wallpaperFit) {
+    wallpaperFit.addEventListener('change', () => {
+      state.ui.wallpaper_fit = wallpaperFit.value === 'cover' ? 'cover' : 'contain';
+      applyUi();
+      queueUiSave();
+    });
+  }
+
   $('#dim').addEventListener('input', (event) => {
     state.ui.dim = Number(event.target.value);
     $('#dim-value').textContent = `${state.ui.dim}%`;
@@ -1308,8 +1372,10 @@ async function init() {
     state.configHash = JSON.stringify(state.config);
     state.ui = data.ui || state.ui;
     state.wallpaperUrl = data.wallpaper_url || null;
+    state.builtinWallpapers = Array.isArray(data.builtin_wallpapers) ? data.builtin_wallpapers : [];
     state.service = data.service || state.service;
     applyUi();
+    renderWallpaperLibrary();
     renderService();
     renderTarget();
     renderBindings();

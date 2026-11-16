@@ -33,6 +33,8 @@ from aula_knob import (
 
 DEFAULT_UI = {
     "wallpaper": None,
+    "wallpaper_builtin": None,
+    "wallpaper_fit": "contain",
     "dim": 42,
     "blur": 0,
     "accent": "violet",
@@ -41,6 +43,10 @@ DEFAULT_UI = {
 ACCENTS = ("violet", "cyan", "lime", "rose", "amber")
 
 MAX_BODY = 30 * 1024 * 1024
+
+# Встроенная библиотека обоев лежит рядом с интерфейсом (попадает в exe).
+BUILTIN_WALLPAPERS_DIR = Path(__file__).resolve().parent / "ui" / "wallpapers"
+BUILTIN_MANIFEST = BUILTIN_WALLPAPERS_DIR / "manifest.json"
 
 _IMAGE_MAGIC = (
     (b"\x89PNG\r\n\x1a\n", ".png"),
@@ -127,6 +133,23 @@ def _image_ext(data: bytes) -> str | None:
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return ".webp"
     return None
+
+
+def builtin_wallpapers() -> list[dict[str, str]]:
+    """Встроенные обои: файл, название и URL для миниатюры."""
+    items: list[dict[str, str]] = []
+    manifest = _load_json(BUILTIN_MANIFEST, {})
+    raw = manifest.get("wallpapers") if isinstance(manifest, dict) else None
+    if isinstance(raw, list):
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            name = Path(str(item.get("file", ""))).name
+            if not name or not (BUILTIN_WALLPAPERS_DIR / name).is_file():
+                continue
+            title = str(item.get("title") or Path(name).stem).strip() or Path(name).stem
+            items.append({"file": name, "title": title, "url": f"wallpapers/{name}"})
+    return items
 
 
 class Journal:
@@ -257,12 +280,20 @@ class Core:
                 candidate = self.wallpaper_dir / Path(data["wallpaper"]).name
                 if candidate.is_file():
                     result["wallpaper"] = candidate.name
+            builtin = data.get("wallpaper_builtin")
+            if isinstance(builtin, str):
+                name = Path(builtin).name
+                if any(item["file"] == name for item in builtin_wallpapers()):
+                    result["wallpaper_builtin"] = name
+                    result["wallpaper"] = None
             for key in ("dim", "blur"):
                 value = data.get(key)
                 if isinstance(value, int) and not isinstance(value, bool):
                     result[key] = max(0, min(90, value))
             if data.get("accent") in ACCENTS:
                 result["accent"] = data["accent"]
+            if data.get("wallpaper_fit") in ("contain", "cover"):
+                result["wallpaper_fit"] = data["wallpaper_fit"]
             if isinstance(data.get("close_to_tray"), bool):
                 result["close_to_tray"] = data["close_to_tray"]
             if isinstance(data.get("hold_follows_target"), bool):
@@ -276,12 +307,20 @@ class Core:
     def _save_ui(self) -> None:
         _write_json(self.ui_path, self.ui)
 
-    def wallpaper_data_url(self) -> str | None:
+    def _wallpaper_path(self) -> Path | None:
+        builtin = self.ui.get("wallpaper_builtin")
+        if builtin:
+            path = BUILTIN_WALLPAPERS_DIR / Path(builtin).name
+            return path if path.is_file() else None
         name = self.ui.get("wallpaper")
         if not name:
             return None
         path = self.wallpaper_dir / Path(name).name
-        if not path.is_file():
+        return path if path.is_file() else None
+
+    def wallpaper_data_url(self) -> str | None:
+        path = self._wallpaper_path()
+        if path is None:
             return None
         try:
             data = path.read_bytes()
@@ -300,6 +339,7 @@ class Core:
             "config_path": str(self.config_path),
             "ui": self.ui,
             "wallpaper_url": self.wallpaper_data_url(),
+            "builtin_wallpapers": builtin_wallpapers(),
             "service": self.service.status(),
             "bindings": list(BINDING_NAMES),
             "default_config": DEFAULT_CONFIG,
@@ -427,6 +467,8 @@ class Core:
             self.ui["blur"] = max(0, min(30, int(data["blur"])))
         if data.get("accent") in ACCENTS:
             self.ui["accent"] = data["accent"]
+        if data.get("wallpaper_fit") in ("contain", "cover"):
+            self.ui["wallpaper_fit"] = data["wallpaper_fit"]
         if isinstance(data.get("close_to_tray"), bool):
             self.ui["close_to_tray"] = data["close_to_tray"]
         self._save_ui()
@@ -448,8 +490,19 @@ class Core:
         path = self.wallpaper_dir / f"bg{ext}"
         path.write_bytes(body)
         self.ui["wallpaper"] = path.name
+        self.ui["wallpaper_builtin"] = None
         self._save_ui()
         self.journal.info("Обои обновлены")
+        return {"ok": True, "url": self.wallpaper_data_url(), "ui": self.ui}
+
+    def set_builtin_wallpaper(self, name: Any) -> dict[str, Any]:
+        file = Path(str(name or "")).name
+        if not any(item["file"] == file for item in builtin_wallpapers()):
+            raise ApiError("Такой картинки нет во встроенной библиотеке")
+        self.ui["wallpaper"] = None
+        self.ui["wallpaper_builtin"] = file
+        self._save_ui()
+        self.journal.info(f"Обои из библиотеки: {file}")
         return {"ok": True, "url": self.wallpaper_data_url(), "ui": self.ui}
 
     def clear_wallpaper(self) -> dict[str, Any]:
@@ -459,16 +512,14 @@ class Core:
             except OSError:
                 pass
         self.ui["wallpaper"] = None
+        self.ui["wallpaper_builtin"] = None
         self._save_ui()
         return {"ok": True, "ui": self.ui}
 
     def desktop_wallpaper(self) -> dict[str, Any]:
-        name = self.ui.get("wallpaper")
-        if not name:
+        path = self._wallpaper_path()
+        if path is None:
             raise ApiError("Сначала выберите обои для меню")
-        path = self.wallpaper_dir / Path(name).name
-        if not path.is_file():
-            raise ApiError("Файл обоев не найден")
         try:
             winhook.set_desktop_wallpaper(str(path))
         except OSError as exc:

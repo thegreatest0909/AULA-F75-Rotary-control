@@ -1,0 +1,10 @@
+{
+  "wallpapers": [
+    { "file": "aurora.jpg", "title": "Аврора" },
+    { "file": "dusk.jpg", "title": "Сумерки" },
+    { "file": "ocean.jpg", "title": "Океан" },
+    { "file": "sunset.jpg", "title": "Закат" },
+    { "file": "mint.jpg", "title": "Мята" },
+    { "file": "graphite.jpg", "title": "Графит" }
+  ]
+}

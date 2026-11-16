@@ -57,6 +57,37 @@ button { cursor: pointer; }
   transition: filter 0.28s ease;
 }
 
+/* Своя картинка: показываем её целиком по размеру окна, а края заполняем
+   размытой копией — как в просмотрщике фотографий Windows. */
+.bg-photo {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: none;
+  pointer-events: none;
+  background-color: #07080d;
+}
+.bg-photo.on { display: block; }
+.bg-photo::before,
+.bg-photo::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--wallpaper);
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.bg-photo::before {
+  inset: -60px;
+  background-size: cover;
+  filter: blur(34px) brightness(0.5) saturate(115%);
+  opacity: 0.9;
+}
+.bg-photo::after {
+  background-size: contain;
+}
+.bg-photo[data-fit="cover"]::after { background-size: cover; }
+
 .bg-tint {
   position: fixed;
   inset: 0;
@@ -749,6 +780,85 @@ kbd {
 }
 
 /* ------------------------------------------------------------------ appearance */
+.library-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 2px 0 10px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wallpaper-library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.wallpaper-item {
+  position: relative;
+  aspect-ratio: 8 / 5;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.04);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.wallpaper-item::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 45%, rgba(4, 5, 10, 0.78));
+}
+.wallpaper-item span {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 8px;
+  z-index: 1;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #f3f4fa;
+  text-align: left;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wallpaper-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--line-strong);
+}
+.wallpaper-item.active {
+  border-color: rgba(var(--accent-rgb), 0.9);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.32);
+}
+.wallpaper-item.active::before {
+  content: "✓";
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(var(--accent-rgb), 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.wallpaper-item:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.7);
+  outline-offset: 2px;
+}
 .dropzone {
   display: flex;
   flex-direction: column;
@@ -785,6 +895,22 @@ kbd {
 .drop-hint { margin-top: 9px; color: #6f778b; font-size: 10.5px; }
 
 .dropzone .row { margin-top: 6px; }
+.fit-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b8bfd0;
+}
+.fit-field select {
+  width: auto;
+  min-width: 148px;
+  padding: 7px 30px 7px 10px;
+  border-radius: 10px;
+  font-size: 11.5px;
+}
 
 .slider-row { display: grid; grid-template-columns: 120px minmax(0, 1fr) 56px; align-items: center; gap: 14px; padding: 10px 0; }
 .slider-row label { font-size: 12px; color: #b8bfd0; }

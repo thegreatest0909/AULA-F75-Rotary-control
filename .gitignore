@@ -7,10 +7,11 @@ __pycache__/
 *.log
 *.tmp
 
-# Личные настройки интерфейса и обои не публикуются
+# Личные настройки интерфейса не публикуются; встроенная библиотека обоев
+# лежит в ui/wallpapers и коммитится.
 ui.json
-wallpapers/*
-!wallpapers/.gitkeep
+/wallpapers/*
+!/wallpapers/.gitkeep
 
 # Виртуальные окружения
 .venv/

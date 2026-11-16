@@ -37,7 +37,7 @@ import core
 import winhook
 
 APP_NAME = "AULA F75 Knob"
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
 REPO_URL = "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(__file__).resolve().parent
@@ -254,6 +254,8 @@ class Api:
             return self._core.apply_ui(data)
         if route == "/api/wallpaper/clear":
             return self._core.clear_wallpaper()
+        if route == "/api/wallpaper/builtin":
+            return self._core.set_builtin_wallpaper(data.get("file"))
         if route == "/api/wallpaper/desktop":
             return self._core.desktop_wallpaper()
         if route == "/api/targets":
@@ -282,6 +284,15 @@ class Api:
             return {"ok": False, "error": "Некорректные данные файла"}
         try:
             return self._core.upload_wallpaper(body)
+        except core.ApiError as exc:
+            return {"ok": False, "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            traceback.print_exc()
+            return {"ok": False, "error": str(exc)}
+
+    def set_builtin_wallpaper(self, name: str | None) -> dict[str, Any]:
+        try:
+            return self._core.set_builtin_wallpaper(name)
         except core.ApiError as exc:
             return {"ok": False, "error": str(exc)}
         except Exception as exc:  # noqa: BLE001
