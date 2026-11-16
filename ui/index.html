@@ -159,14 +159,14 @@
 
           <div class="form-grid">
             <label class="field">
-              <span>Приложение</span>
-              <input id="target-app" list="app-list" placeholder="Например, chrome.exe" autocomplete="off" spellcheck="false">
-              <small>Оставьте пустым, чтобы управлять системной громкостью</small>
+              <span>Приложения</span>
+              <input id="target-app" list="app-list" placeholder="Например, chrome.exe или chrome.exe, discord.exe" autocomplete="off" spellcheck="false">
+              <small>Несколько приложений — через запятую. Пусто — системная громкость</small>
             </label>
             <label class="field">
               <span>Шаг за щелчок <output id="target-step-value">2%</output></span>
               <input id="target-step" type="range" min="1" max="10" step="1" value="2">
-              <small>Вращение меняет громкость выбранного приложения</small>
+              <small>Вращение меняет громкость выбранных приложений</small>
             </label>
           </div>
           <datalist id="app-list"></datalist>
@@ -174,12 +174,32 @@
           <label class="check">
             <input type="checkbox" id="target-mute">
             <span class="check-box"></span>
-            Нажатие ручки — mute выбранного приложения
+            Нажатие ручки — mute выбранных приложений
           </label>
 
           <div class="row">
             <button class="button primary" id="target-apply">Применить к ручке</button>
             <button class="button ghost" id="target-system">Системная громкость</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Наборы целей</h3>
+              <p class="muted small">
+                Зажмите <kbd>Ctrl</kbd>+<kbd>Alt</kbd> и вращайте ручку, чтобы переключить набор.
+                Сочетание меняется в «Настройках».
+              </p>
+            </div>
+            <span class="pill" id="targets-count">0</span>
+          </div>
+          <div class="target-sets" id="target-sets">
+            <div class="empty">Пока нет наборов. Выберите приложения и сохраните набор ниже.</div>
+          </div>
+          <div class="target-set-form">
+            <input id="target-set-name" placeholder="Название набора, например «Музыка»" autocomplete="off" spellcheck="false">
+            <button class="button ghost" id="target-set-add">Сохранить текущий выбор</button>
           </div>
         </article>
 
@@ -326,6 +346,26 @@
               <strong>Сворачивать в трей при закрытии</strong>
               <small>Если выключено — крестик полностью завершает программу</small>
             </span>
+          </label>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <h3>Переключение целей</h3>
+              <p class="muted small">Как выбрать другой набор приложений ручкой</p>
+            </div>
+          </div>
+          <label class="field">
+            <span>Сочетание клавиш</span>
+            <select id="opt-switch-modifier">
+              <option value="ctrl+alt">Ctrl + Alt</option>
+              <option value="ctrl+shift">Ctrl + Shift</option>
+              <option value="ctrl">Ctrl</option>
+              <option value="alt">Alt</option>
+              <option value="none">Выключено</option>
+            </select>
+            <small>Удерживайте сочетание и вращайте ручку: вправо — следующий набор, влево — предыдущий. Работает при двух и более наборах.</small>
           </label>
         </article>
 

@@ -37,7 +37,7 @@ import core
 import winhook
 
 APP_NAME = "AULA F75 Knob"
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 REPO_URL = "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 FROZEN = bool(getattr(sys, "frozen", False))
 BASE_DIR = Path(__file__).resolve().parent
@@ -207,8 +207,11 @@ class Api:
         if route == "/api/config":
             return self._core.save_config(data)
         if route == "/api/target":
+            apps = data.get("apps")
+            if apps is None:
+                apps = data.get("app") or []
             return self._core.set_target(
-                str(data.get("app") or ""),
+                apps,
                 int(data.get("step", 2) or 2),
                 bool(data.get("mute_on_press", False)),
             )
@@ -253,6 +256,11 @@ class Api:
             return self._core.clear_wallpaper()
         if route == "/api/wallpaper/desktop":
             return self._core.desktop_wallpaper()
+        if route == "/api/targets":
+            if (method or "GET").upper() == "POST":
+                return self._core.set_targets(data.get("targets", []))
+            config = self._core.state().get("config") or {}
+            return {"ok": True, "targets": config.get("targets", [])}
         if route == "/api/settings":
             if self._app is None:
                 raise core.ApiError("Приложение ещё не готово")
@@ -385,10 +393,13 @@ class Application:
 
     def get_settings(self) -> dict[str, Any]:
         ui = self.api._core.ui
+        config = self.api._core.state().get("config") or {}
+        knob = config.get("knob", {}) if isinstance(config, dict) else {}
         return {
             "autostart": autostart_enabled(),
             "start_minimized": bool(ui.get("start_minimized", True)),
             "close_to_tray": bool(ui.get("close_to_tray", True)),
+            "switch_modifier": str(knob.get("switch_modifier", "ctrl+alt")),
             "version": APP_VERSION,
         }
 
@@ -402,6 +413,12 @@ class Application:
         if "autostart" in data or "start_minimized" in data:
             enabled = bool(data.get("autostart", autostart_enabled()))
             set_autostart(enabled, bool(ui.get("start_minimized", True)))
+        if "switch_modifier" in data:
+            config = self.api._core.state().get("config") or {}
+            if isinstance(config, dict):
+                knob = config.setdefault("knob", {})
+                knob["switch_modifier"] = str(data["switch_modifier"])
+                self.api._core.save_config(config)
         return self.get_settings()
 
     # ---------------------------------------------------------------- window

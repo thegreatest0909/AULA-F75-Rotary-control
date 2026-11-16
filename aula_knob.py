@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """AULA F75 Knob — превращает ручку клавиатуры в универсальный контроллер.
 
 Утилита ставит низкоуровневый хук клавиатуры, ловит события ручки AULA F75
@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import queue
 import sys
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -46,12 +47,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "hold_ms": 500,
         "merge_rotation_ms": 0,
         "second_layer_modifier": "shift",
+        "switch_modifier": "ctrl+alt",
         "rotate_left_keys": ["volume down"],
         "rotate_right_keys": ["volume up"],
         "press_keys": ["volume mute", "play/pause"],
     },
     "cooldown_ms": 0,
     "log_file": None,
+    "targets": [],
     "bindings": {
         "rotate_left": {"type": "volume", "delta": -1},
         "rotate_right": {"type": "volume", "delta": 1},
@@ -115,6 +118,10 @@ class Settings:
     # "none" — второй слой только при реально зажатой ручке (если прошивка
     # вообще присылает удержание).
     second_layer_modifier: str = "shift"
+    # Сочетание клавиш: удерживая его и вращая ручку, переключаем цель.
+    switch_modifier: str = "ctrl+alt"
+    # Наборы целей: [{"name": "...", "apps": ["exe", ...]}, ...]
+    targets: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Any) -> "Settings":
@@ -134,6 +141,8 @@ class Settings:
         rotate_right = _key_list(knob, "rotate_right_keys", ["volume up"])
         press = _key_list(knob, "press_keys", ["volume mute", "play/pause"])
         second_layer_modifier = _modifier(knob)
+        switch_modifier = _switch_modifier(knob)
+        targets = _targets(data.get("targets"))
 
         bindings = data.get("bindings", {})
         if not isinstance(bindings, dict) or not bindings:
@@ -167,6 +176,8 @@ class Settings:
             bindings=dict(bindings),
             log_file=log_file or None,
             second_layer_modifier=second_layer_modifier,
+            switch_modifier=switch_modifier,
+            targets=targets,
         )
         settings.role_by_vk()  # проверяем конфликты и имена клавиш
         return settings
@@ -218,6 +229,13 @@ class Settings:
                 if self.second_layer_modifier == "none"
                 else f"вращение с зажатым {self.second_layer_modifier}"
             ),
+            "Переключение цели: "
+            + (
+                "выключено"
+                if self.switch_modifier == "none"
+                else f"зажать {self.switch_modifier} + вращение"
+            ),
+            f"Наборов целей: {len(self.targets)}",
             f"Пауза между срабатываниями: {self.cooldown_ms} мс",
             "Клавиши ручки:",
             f"  влево:  {', '.join(self.rotate_left_keys)}",
@@ -292,6 +310,84 @@ def _modifier_vk(name: str) -> int:
         return 0
 
 
+def _switch_modifier(knob: dict[str, Any]) -> str:
+    """Сочетание клавиш для переключения цели (например, ctrl+alt)."""
+    raw = knob.get("switch_modifier", "ctrl+alt")
+    if raw is None:
+        return "none"
+    if not isinstance(raw, str):
+        raise ConfigError("'switch_modifier' должен быть строкой")
+    name = raw.strip().lower()
+    if name in ("", "none", "нет", "off"):
+        return "none"
+    parts = [part.strip() for part in name.split("+") if part.strip()]
+    if not parts:
+        return "none"
+    for part in parts:
+        try:
+            winhook.parse_key(part)
+        except ValueError as exc:
+            raise ConfigError(f"knob.switch_modifier: {exc}") from None
+    return "+".join(parts)
+
+
+def _switch_vks(name: str) -> tuple[int, ...]:
+    if not name or name == "none":
+        return ()
+    result: list[int] = []
+    for part in name.split("+"):
+        try:
+            result.append(winhook.parse_key(part.strip()))
+        except ValueError:
+            return ()
+    return tuple(result)
+
+
+def _action_apps(action: Any) -> list[str]:
+    """Список приложений из действия: apps (список) или app (одно)."""
+    if not isinstance(action, dict):
+        return []
+    raw = action.get("apps")
+    apps: list[str] = []
+    if isinstance(raw, (list, tuple)):
+        apps = [str(item).strip() for item in raw if str(item).strip()]
+    if not apps:
+        app = action.get("app")
+        if app is not None and str(app).strip():
+            apps = [str(app).strip()]
+    return apps
+
+
+def _mute_action(apps: list[str], state: Any = "toggle") -> dict[str, Any]:
+    """Действие mute для одного или нескольких приложений."""
+    action: dict[str, Any] = {"type": "mute", "state": state}
+    if len(apps) == 1:
+        action["app"] = apps[0]
+    elif len(apps) > 1:
+        action["apps"] = list(apps)
+    return action
+
+
+def _targets(raw: Any) -> list[dict[str, Any]]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ConfigError("'targets' должен быть списком наборов")
+    result: list[dict[str, Any]] = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise ConfigError(f"targets[{index}] должен быть объектом")
+        name = str(item.get("name") or f"Набор {index + 1}").strip() or f"Набор {index + 1}"
+        apps_raw = item.get("apps", [])
+        if isinstance(apps_raw, str):
+            apps_raw = [apps_raw]
+        if not isinstance(apps_raw, list):
+            raise ConfigError(f"targets[{index}].apps должен быть списком")
+        apps = [str(app).strip() for app in apps_raw if str(app).strip()]
+        result.append({"name": name[:60], "apps": apps})
+    return result
+
+
 class Controller:
     def __init__(
         self,
@@ -307,6 +403,8 @@ class Controller:
         self._log_sink = log_sink
         self.roles = settings.role_by_vk()
         self._second_layer_vk = _modifier_vk(settings.second_layer_modifier)
+        self._switch_vks = _switch_vks(settings.switch_modifier)
+        self._last_switch = 0.0
         self._events: queue.Queue[winhook.KeyEvent] = queue.Queue()
         self._action_queue: queue.Queue[tuple[str, Any] | None] = queue.Queue()
         self._hook: winhook.KeyboardHook | None = None
@@ -409,6 +507,9 @@ class Controller:
 
     def _rotate(self, role: str) -> None:
         now = time.monotonic()
+        if self._switch_vks and all(winhook.is_key_down(vk) for vk in self._switch_vks):
+            self._switch_target(role, now)
+            return
         merge = self.settings.merge_rotation_ms / 1000.0
         if (
             merge
@@ -427,6 +528,102 @@ class Controller:
         else:
             binding = role
         self._fire(binding, now)
+
+    def _switch_target(self, role: str, now: float) -> None:
+        """Переключает активный набор целей при зажатом сочетании клавиш."""
+        if now - self._last_switch < 0.35:
+            return
+        targets = self.settings.targets
+        if len(targets) < 2:
+            self.log("Мало наборов целей: добавьте их в меню на вкладке «Громкость»", force=True)
+            return
+        current = _action_apps(self.settings.bindings.get("rotate_right"))
+        index = -1
+        for position, target in enumerate(targets):
+            apps = [str(app) for app in target.get("apps", [])]
+            if [app.lower() for app in apps] == [app.lower() for app in current]:
+                index = position
+                break
+        if role == "rotate_right":
+            next_index = 0 if index == -1 else (index + 1) % len(targets)
+        else:
+            next_index = 0 if index == -1 else (index - 1) % len(targets)
+        self._last_switch = now
+        self._last_rotate = now
+        self._last_direction = role
+        self._apply_target(targets[next_index])
+
+    def _apply_target(self, target: dict[str, Any]) -> None:
+        apps = [str(app).strip() for app in target.get("apps", []) if str(app).strip()]
+        try:
+            config = json.loads(self.config_path.read_text(encoding="utf-8-sig"))
+            if not isinstance(config, dict):
+                raise ValueError("конфиг повреждён")
+            bindings = config.setdefault("bindings", {})
+            if not isinstance(bindings, dict):
+                raise ValueError("раздел bindings повреждён")
+            step_value = 2
+            rotate = bindings.get("rotate_right")
+            if isinstance(rotate, dict):
+                try:
+                    step_value = max(1, min(50, int(rotate.get("step", 2))))
+                except (TypeError, ValueError):
+                    step_value = 2
+
+            def volume_action(delta: int) -> dict[str, Any]:
+                action: dict[str, Any] = {"type": "volume", "delta": delta, "step": step_value}
+                if len(apps) == 1:
+                    action["app"] = apps[0]
+                elif len(apps) > 1:
+                    action["apps"] = list(apps)
+                return action
+
+            bindings["rotate_left"] = volume_action(-1)
+            bindings["rotate_right"] = volume_action(1)
+            press = bindings.get("press")
+            if isinstance(press, dict) and press.get("type") == "mute":
+                bindings["press"] = _mute_action(apps, press.get("state", "toggle"))
+            hold = bindings.get("hold")
+            if (
+                isinstance(hold, dict)
+                and hold.get("type") == "media"
+                and str(hold.get("action", "")).strip().lower() in ("mute", "mute_toggle")
+            ):
+                # Удержание не должно выключать звук всей системы, если ручка
+                # управляет конкретными приложениями.
+                bindings["hold"] = _mute_action(apps)
+            temp = self.config_path.with_suffix(self.config_path.suffix + ".tmp")
+            temp.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            os.replace(temp, self.config_path)
+            settings = Settings.load(self.config_path)
+            self.settings = settings
+            self.roles = settings.role_by_vk()
+            self._second_layer_vk = _modifier_vk(settings.second_layer_modifier)
+            self._switch_vks = _switch_vks(settings.switch_modifier)
+            self._config_mtime = self._mtime()
+            name = target.get("name") or ", ".join(apps) or "Система"
+            self.log(f"Цель переключена: {name}", force=True)
+        except Exception as exc:  # noqa: BLE001 - переключение не должно ронять сервис
+            self.log(f"Не удалось переключить цель: {exc}", force=True)
+
+    def _retarget_hold(self, action: Any) -> Any:
+        """Удержание не должно выключать звук всей системы.
+
+        Если ручка управляет конкретными приложениями, а на удержании стоит
+        системный медиа-mute, заменяем его на mute этих приложений.
+        """
+        if not isinstance(action, dict):
+            return action
+        if action.get("type") != "media":
+            return action
+        if str(action.get("action", "")).strip().lower() not in ("mute", "mute_toggle"):
+            return action
+        apps = _action_apps(self.settings.bindings.get("rotate_right"))
+        if not apps:
+            apps = _action_apps(self.settings.bindings.get("rotate_left"))
+        if not apps:
+            return action
+        return _mute_action(apps)
 
     def _second_layer_held(self) -> bool:
         """Зажат ли модификатор второго слоя (Shift по умолчанию).
@@ -477,6 +674,7 @@ class Controller:
         action = self.settings.bindings.get(binding)
         if action is None:
             return
+        action = self._retarget_hold(action) if binding == "hold" else action
         now = time.monotonic() if now is None else now
         cooldown = self.settings.cooldown_ms
         if isinstance(action, dict):
@@ -530,6 +728,7 @@ class Controller:
         self.log = Log(new_settings.log_file, self.verbose, self._log_sink)
         self.roles = new_settings.role_by_vk()
         self._second_layer_vk = _modifier_vk(new_settings.second_layer_modifier)
+        self._switch_vks = _switch_vks(new_settings.switch_modifier)
         if self._hook:
             self._hook.set_blocked(self.roles if new_settings.suppress else ())
             self._hook.set_interest(set(self.roles))

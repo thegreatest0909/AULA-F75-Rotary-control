@@ -645,6 +645,41 @@ input[type="range"]::-moz-range-thumb {
 
 .empty { padding: 26px 12px; text-align: center; color: #6f778b; font-size: 12.5px; }
 
+/* ------------------------------------------------------------ target sets */
+.target-sets { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.target-set {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.025);
+}
+.target-set.current {
+  border-color: rgba(var(--accent-rgb), 0.34);
+  background: linear-gradient(100deg, rgba(var(--accent-rgb), 0.09), rgba(255, 255, 255, 0.02));
+}
+.target-set-info { flex: 1; min-width: 0; }
+.target-set-info strong { display: block; font-size: 12.5px; font-weight: 600; }
+.target-set-info small { display: block; margin-top: 2px; color: #778096; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.target-set-actions { display: flex; gap: 6px; flex: 0 0 auto; }
+.target-set-form { display: flex; gap: 10px; align-items: stretch; }
+.target-set-form input { flex: 1; min-width: 0; }
+kbd {
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+  font: inherit;
+  font-size: 10.5px;
+  color: #cdd3e2;
+}
+@media (max-width: 720px) {
+  .target-set-form { flex-direction: column; }
+  .target-set { align-items: flex-start; flex-direction: column; }
+}
+
 .master-row { display: flex; align-items: center; gap: 16px; }
 .master-row input { flex: 1; }
 

@@ -215,27 +215,48 @@ def _do_media(action: dict[str, Any]) -> None:
     winhook.press_key(winhook.parse_key(key))
 
 
+def _app_list(action: dict[str, Any]) -> list[str]:
+    """Список приложений действия: apps (список) или app (одно)."""
+    raw = action.get("apps")
+    items: list[str] = []
+    if isinstance(raw, (list, tuple)):
+        items = [str(item).strip() for item in raw if str(item).strip()]
+    if not items:
+        app = action.get("app")
+        if app is not None and str(app).strip():
+            items = [str(app).strip()]
+    return items
+
+
 def _do_volume(action: dict[str, Any], log: Log) -> None:
-    app = action.get("app")
+    apps = _app_list(action)
     step = max(1, _to_int(action.get("step", 2), "volume.step"))
-    if app:
-        app = str(app).strip()
+    if apps:
         level = action.get("level")
         if level is not None:
-            count = audio.set_app_volume(app, _to_int(level, "volume.level"))
-            if count:
-                log(f"громкость {app}: {level}%")
+            target_level = _to_int(level, "volume.level")
+            active = 0
+            for app in apps:
+                active += audio.set_app_volume(app, target_level)
+            if active:
+                log(f"громкость {', '.join(apps)}: {target_level}%")
             else:
-                log(f"нет активной аудиосессии {app!r}")
+                log(f"нет активных аудиосессий: {', '.join(apps)}")
             return
         delta = _to_int(action.get("delta", 0), "volume.delta")
         if not delta:
             return
-        count, current = audio.adjust_app_volume(app, delta * step)
-        if count:
-            log(f"громкость {app}: {current}%")
+        changes: list[str] = []
+        active = 0
+        for app in apps:
+            count, current = audio.adjust_app_volume(app, delta * step)
+            if count:
+                active += count
+                changes.append(f"{app} {current}%")
+        if active:
+            log("громкость: " + ", ".join(changes))
         else:
-            log(f"нет активной аудиосессии {app!r}")
+            log(f"нет активных аудиосессий: {', '.join(apps)}")
         return
 
     level = action.get("level")
@@ -273,17 +294,22 @@ def _do_mute(action: dict[str, Any], log: Log) -> None:
         else:
             raise ActionError(f"mute: неизвестное состояние {raw_state!r}")
 
-    app = action.get("app")
-    if app:
-        app = str(app).strip()
-        try:
-            count, current = audio.set_app_mute(app, state)
-        except audio.AudioError as exc:
-            raise ActionError(f"не удалось переключить mute {app!r}: {exc}") from None
-        if count:
-            log(f"{app}: {'mute' if current else 'звук включён'}")
+    apps = _app_list(action)
+    if apps:
+        changes: list[str] = []
+        active = 0
+        for app in apps:
+            try:
+                count, current = audio.set_app_mute(app, state)
+            except audio.AudioError as exc:
+                raise ActionError(f"не удалось переключить mute {app!r}: {exc}") from None
+            if count:
+                active += count
+                changes.append(f"{app}: {'mute' if current else 'звук включён'}")
+        if active:
+            log("; ".join(changes))
         else:
-            log(f"нет активной аудиосессии {app!r}")
+            log(f"нет активных аудиосессий: {', '.join(apps)}")
         return
 
     if state is None:
@@ -299,6 +325,20 @@ def _do_focus_validate(action: dict[str, Any], where: str) -> list[str]:
     if not str(action.get("title", "")).strip():
         return [f"{where}: focus требует поле 'title'"]
     return []
+
+
+def _validate_apps(action: dict[str, Any], where: str, kind: str) -> None:
+    apps = action.get("apps")
+    if apps is not None:
+        if not isinstance(apps, (list, tuple)) or not apps:
+            raise ActionError(f"{where}: {kind}.apps должен быть непустым списком")
+        for item in apps:
+            if not isinstance(item, str) or not item.strip():
+                raise ActionError(f"{where}: {kind}.apps: элементы должны быть непустыми строками")
+        return
+    app = action.get("app")
+    if app is not None and not str(app).strip():
+        raise ActionError(f"{where}: {kind}.app не может быть пустым")
 
 
 def validate_action(action: Any, where: str) -> list[str]:
@@ -355,9 +395,7 @@ def validate_action(action: Any, where: str) -> list[str]:
                     f"доступно: {', '.join(sorted(_MEDIA_KEYS))}"
                 )
         elif kind == "volume":
-            app = action.get("app")
-            if app is not None and not str(app).strip():
-                errors.append(f"{where}: volume.app не может быть пустым")
+            _validate_apps(action, where, "volume")
             step = _to_int(action.get("step", 2), "volume.step")
             if not 1 <= step <= 50:
                 errors.append(f"{where}: volume.step должен быть от 1 до 50")
@@ -367,9 +405,7 @@ def validate_action(action: Any, where: str) -> list[str]:
                     errors.append(f"{where}: volume.level должен быть от 0 до 100")
             _to_int(action.get("delta", 0), "volume.delta")
         elif kind == "mute":
-            app = action.get("app")
-            if app is not None and not str(app).strip():
-                errors.append(f"{where}: mute.app не может быть пустым")
+            _validate_apps(action, where, "mute")
             state = action.get("state", "toggle")
             if not isinstance(state, bool):
                 if str(state).strip().lower() not in (
@@ -420,14 +456,14 @@ def describe(action: Any) -> str:
     if kind == "media":
         return f"медиа {action.get('action')!r}"
     if kind == "volume":
-        app = action.get("app")
-        suffix = f" для {app}" if app else ""
+        apps = _app_list(action)
+        suffix = f" для {', '.join(apps)}" if apps else ""
         if action.get("level") is not None:
             return f"громкость{suffix} = {action.get('level')}%"
         return f"громкость{suffix} {action.get('delta', 0):+}×{action.get('step', 2)}%"
     if kind == "mute":
-        app = action.get("app")
-        return f"mute {app or 'системы'}"
+        apps = _app_list(action)
+        return f"mute {', '.join(apps) or 'системы'}"
     if kind == "wheel":
         return f"колесо {action.get('delta')!r}"
     if kind == "focus":

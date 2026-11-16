@@ -80,6 +80,46 @@ def _write_json(path: Path, data: Any) -> None:
     os.replace(temp, path)
 
 
+def _as_apps(value: Any) -> list[str]:
+    """Приводит app/apps к списку имён приложений."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return []
+
+
+def _action_apps(action: Any) -> list[str]:
+    """Список приложений действия: apps (список) или app (одно)."""
+    if not isinstance(action, dict):
+        return []
+    apps = _as_apps(action.get("apps"))
+    if apps:
+        return apps
+    return _as_apps(action.get("app"))
+
+
+def _mute_action(apps: list[str], state: Any = "toggle") -> dict[str, Any]:
+    """Действие mute для одного или нескольких приложений."""
+    action: dict[str, Any] = {"type": "mute", "state": state}
+    if len(apps) == 1:
+        action["app"] = apps[0]
+    elif len(apps) > 1:
+        action["apps"] = list(apps)
+    return action
+
+
+def _is_system_media_mute(action: Any) -> bool:
+    """Системный медиа-mute (выключает звук всей Windows)."""
+    return (
+        isinstance(action, dict)
+        and action.get("type") == "media"
+        and str(action.get("action", "")).strip().lower() in ("mute", "mute_toggle")
+    )
+
+
 def _image_ext(data: bytes) -> str | None:
     for magic, ext in _IMAGE_MAGIC:
         if data.startswith(magic):
@@ -181,6 +221,31 @@ class Core:
         self.wallpaper_dir.mkdir(parents=True, exist_ok=True)
         self.ui = self._load_ui()
         self._started_at = int(time.time())
+        self._migrate_hold()
+
+    def _migrate_hold(self) -> None:
+        """Удержание не должно выключать звук всей системы.
+
+        Если ручка уже управляет приложениями, системный медиа-mute на
+        удержании заменяется на mute этих приложений (один раз для старых
+        конфигов, дальше это делает set_target).
+        """
+        config = _load_json(self.config_path, {})
+        if not isinstance(config, dict):
+            return
+        bindings = config.get("bindings")
+        if not isinstance(bindings, dict):
+            return
+        apps = _action_apps(bindings.get("rotate_right")) or _action_apps(
+            bindings.get("rotate_left")
+        )
+        if not apps or not _is_system_media_mute(bindings.get("hold")):
+            return
+        bindings["hold"] = _mute_action(apps)
+        self.ui["hold_follows_target"] = True
+        self._save_ui()
+        _write_json(self.config_path, config)
+        self.journal.info("Удержание перенастроено на mute выбранных приложений")
 
     # ------------------------------------------------------------------ ui state
 
@@ -200,6 +265,12 @@ class Core:
                 result["accent"] = data["accent"]
             if isinstance(data.get("close_to_tray"), bool):
                 result["close_to_tray"] = data["close_to_tray"]
+            if isinstance(data.get("hold_follows_target"), bool):
+                result["hold_follows_target"] = data["hold_follows_target"]
+            if isinstance(data.get("press_follows_target"), bool):
+                result["press_follows_target"] = data["press_follows_target"]
+            if isinstance(data.get("press_backup"), (dict, list)):
+                result["press_backup"] = data["press_backup"]
         return result
 
     def _save_ui(self) -> None:
@@ -261,8 +332,8 @@ class Core:
         self.journal.info("Конфиг сохранён")
         return {"ok": True, "config": data}
 
-    def set_target(self, app: str | None, step: int = 2, mute_on_press: bool = False) -> dict[str, Any]:
-        app = (app or "").strip()
+    def set_target(self, apps: Any, step: int = 2, mute_on_press: bool = False) -> dict[str, Any]:
+        items = _as_apps(apps)
         step = max(1, min(50, int(step)))
         config = _load_json(self.config_path, {})
         if not isinstance(config, dict):
@@ -270,32 +341,62 @@ class Core:
         bindings = config.setdefault("bindings", {})
         if not isinstance(bindings, dict):
             raise ApiError("config.json: bindings должен быть объектом")
-        if app:
-            left = {"type": "volume", "delta": -1, "step": step, "app": app}
-            right = {"type": "volume", "delta": 1, "step": step, "app": app}
-        else:
-            left = {"type": "volume", "delta": -1, "step": step}
-            right = {"type": "volume", "delta": 1, "step": step}
-        bindings["rotate_left"] = left
-        bindings["rotate_right"] = right
+
+        def volume_action(delta: int) -> dict[str, Any]:
+            action: dict[str, Any] = {"type": "volume", "delta": delta, "step": step}
+            if len(items) == 1:
+                action["app"] = items[0]
+            elif len(items) > 1:
+                action["apps"] = list(items)
+            return action
+
+        bindings["rotate_left"] = volume_action(-1)
+        bindings["rotate_right"] = volume_action(1)
+        if items:
+            hold = bindings.get("hold")
+            follows = self.ui.get("hold_follows_target")
+            if _is_system_media_mute(hold) or (
+                follows and isinstance(hold, dict) and hold.get("type") == "mute"
+            ):
+                # Удержание не должно выключать звук всей системы.
+                bindings["hold"] = _mute_action(items)
+                self.ui["hold_follows_target"] = True
+                self._save_ui()
+        elif self.ui.get("hold_follows_target"):
+            hold = bindings.get("hold")
+            if isinstance(hold, dict) and hold.get("type") == "mute" and _action_apps(hold):
+                bindings["hold"] = {"type": "media", "action": "mute"}
+            self.ui.pop("hold_follows_target", None)
+            self._save_ui()
         if mute_on_press:
             current_press = bindings.get("press")
-            is_mute = isinstance(current_press, dict) and current_press.get("type") == "mute"
-            if not is_mute:
+            if not self.ui.get("press_follows_target"):
                 self.ui["press_backup"] = current_press or DEFAULT_CONFIG["bindings"]["press"]
+                self.ui["press_follows_target"] = True
                 self._save_ui()
-            bindings["press"] = (
-                {"type": "mute", "app": app, "state": "toggle"} if app else {"type": "mute", "state": "toggle"}
-            )
-        else:
+            bindings["press"] = _mute_action(items)
+        elif self.ui.get("press_follows_target"):
             backup = self.ui.pop("press_backup", None)
-            if backup is not None:
-                bindings["press"] = backup
-                self._save_ui()
+            bindings["press"] = backup or DEFAULT_CONFIG["bindings"]["press"]
+            self.ui.pop("press_follows_target", None)
+            self._save_ui()
         self._validate_config(config)
         _write_json(self.config_path, config)
-        self.journal.info(f"Ручка теперь меняет громкость: {app or 'системы'}")
+        name = ", ".join(items) or "системы"
+        self.journal.info(f"Ручка теперь меняет громкость: {name}")
         return {"ok": True, "config": config}
+
+    def set_targets(self, targets: Any) -> dict[str, Any]:
+        if not isinstance(targets, list):
+            raise ApiError("targets должен быть списком")
+        config = _load_json(self.config_path, {})
+        if not isinstance(config, dict):
+            raise ApiError("config.json повреждён")
+        config["targets"] = targets
+        self._validate_config(config)
+        _write_json(self.config_path, config)
+        self.journal.info(f"Наборов целей: {len(targets)}")
+        return {"ok": True, "config": config, "targets": config.get("targets", [])}
 
     def test_binding(self, name: str) -> dict[str, Any]:
         if name not in BINDING_NAMES:

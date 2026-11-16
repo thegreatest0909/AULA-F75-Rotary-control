@@ -153,6 +153,24 @@ function paintRange(element) {
   element.style.setProperty('--val', String(percent));
 }
 
+function normalizeApps(value) {
+  const raw = Array.isArray(value) ? value : String(value ?? '').split(',');
+  const result = [];
+  for (const item of raw) {
+    const name = String(item).trim();
+    if (name && !result.some((entry) => entry.toLowerCase() === name.toLowerCase())) {
+      result.push(name);
+    }
+  }
+  return result;
+}
+
+function appsOf(value) {
+  const action = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  if (Array.isArray(action.apps) && action.apps.length) return normalizeApps(action.apps);
+  return action.app ? normalizeApps(action.app) : [];
+}
+
 function actionObject(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return { ...value };
@@ -217,13 +235,14 @@ function describeAction(value) {
   const action = actionObject(value);
   switch (action.type) {
     case 'volume': {
-      const app = action.app ? ` · ${action.app}` : '';
+      const appNames = appsOf(action);
+      const app = appNames.length ? ` · ${appNames.join(', ')}` : '';
       if (action.level !== undefined) return `Громкость${app} = ${action.level}%`;
       const delta = num(action.delta, 1);
       return `Громкость${app} · ${delta > 0 ? '+' : ''}${delta} × ${num(action.step, 2)}%`;
     }
     case 'mute':
-      return `Mute ${action.app || 'системы'}`;
+      return `Mute ${appsOf(action).join(', ') || 'системы'}`;
     case 'media': {
       const item = MEDIA.find(([key]) => key === action.action);
       return `Медиа · ${item ? item[1] : action.action || '—'}`;
@@ -346,6 +365,18 @@ function renderSettings() {
   if (autostart) autostart.checked = Boolean(settings.autostart);
   if (minimized) minimized.checked = settings.start_minimized !== false;
   if (closeToTray) closeToTray.checked = settings.close_to_tray !== false;
+  const switchModifier = $('#opt-switch-modifier');
+  if (switchModifier) {
+    const value = String(settings.switch_modifier || 'ctrl+alt').toLowerCase();
+    const known = Array.from(switchModifier.options).some((option) => option.value === value);
+    if (!known) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value;
+      switchModifier.appendChild(option);
+    }
+    switchModifier.value = value;
+  }
   const version = $('#settings-version');
   if (version) version.textContent = settings.version || '';
 }
@@ -414,29 +445,39 @@ function deriveTarget() {
   const bindings = (state.config && state.config.bindings) || {};
   const right = actionObject(bindings.rotate_right);
   if (right.type === 'volume') {
+    const apps = appsOf(right);
     const press = actionObject(bindings.press);
-    const targetApp = right.app ? String(right.app).toLowerCase() : '';
-    const pressApp = press.type === 'mute' && press.app ? String(press.app).toLowerCase() : '';
+    const targetApps = apps.map((app) => app.toLowerCase());
+    const pressApps = press.type === 'mute' ? appsOf(press).map((app) => app.toLowerCase()) : [];
     return {
-      app: right.app ? String(right.app) : '',
+      apps,
+      app: apps.join(', '),
       step: num(right.step, 2),
       isVolume: true,
       action: right,
-      muteOnPress: press.type === 'mute' && pressApp === targetApp,
+      muteOnPress:
+        press.type === 'mute' && targetApps.join('|') === pressApps.join('|'),
     };
   }
-  return { app: '', step: 2, isVolume: false, action: right, muteOnPress: false };
+  return { apps: [], app: '', step: 2, isVolume: false, action: right, muteOnPress: false };
+}
+
+function targetLabel() {
+  const apps = state.target.apps || [];
+  if (!apps.length) return 'Система';
+  if (apps.length === 1) return apps[0];
+  return `${apps[0]} +${apps.length - 1}`;
 }
 
 function renderTarget() {
   state.target = deriveTarget();
   const target = state.target;
-  const appName = target.app || 'Система';
+  const appName = targetLabel();
   $('#top-target').textContent = appName;
   $('#home-target').textContent = target.app || 'Системная громкость';
-  $('#home-type').textContent = target.app ? 'Приложение' : 'Система';
+  $('#home-type').textContent = target.apps.length ? 'Приложения' : 'Система';
   $('#hero-caption').textContent = target.app || 'Системная громкость';
-  $('#target-badge').textContent = target.app || 'Система';
+  $('#target-badge').textContent = appName;
   $('#target-mute').checked = Boolean(target.muteOnPress);
 
   if (target.isVolume) {
@@ -449,21 +490,22 @@ function renderTarget() {
   }
   $('#target-step-value').textContent = `${$('#target-step').value}%`;
   paintRange($('#target-step'));
+  renderTargetSets();
 }
 
-async function applyTarget(appOverride) {
-  const app = appOverride !== undefined ? String(appOverride).trim() : $('#target-app').value.trim();
+async function applyTarget(appsOverride, options = {}) {
+  const apps = normalizeApps(
+    appsOverride !== undefined ? appsOverride : $('#target-app').value
+  );
   const step = Math.max(1, Math.min(50, Number($('#target-step').value) || 2));
   const muteOnPress = $('#target-mute').checked;
-  if (appOverride !== undefined) {
-    $('#target-app').value = app;
-  }
+  $('#target-app').value = apps.join(', ');
   const button = $('#target-apply');
   button.disabled = true;
   try {
     const data = await api('/api/target', {
       method: 'POST',
-      body: { app, step, mute_on_press: muteOnPress },
+      body: { apps, step, mute_on_press: muteOnPress },
     });
     state.config = data.config;
     state.configHash = JSON.stringify(data.config);
@@ -478,11 +520,97 @@ async function applyTarget(appOverride) {
     } else {
       renderBindings();
     }
-    toast(app ? `Ручка управляет громкостью: ${app}` : 'Ручка управляет системной громкостью');
+    if (!options.silent) {
+      toast(
+        apps.length
+          ? `Ручка управляет громкостью: ${apps.join(', ')}`
+          : 'Ручка управляет системной громкостью'
+      );
+    }
   } catch (error) {
     toast(error.message, 'error');
+    renderTarget();
   } finally {
     button.disabled = false;
+  }
+}
+
+function renderTargetSets() {
+  const targets = Array.isArray(state.config.targets) ? state.config.targets : [];
+  const counter = $('#targets-count');
+  if (counter) counter.textContent = String(targets.length);
+  const container = $('#target-sets');
+  if (!container) return;
+  if (!targets.length) {
+    container.innerHTML =
+      '<div class="empty">Пока нет наборов. Выберите приложения и сохраните набор ниже.</div>';
+    return;
+  }
+  const currentKey = (state.target.apps || [])
+    .map((app) => app.toLowerCase())
+    .join('|');
+  container.innerHTML = targets
+    .map((target, index) => {
+      const apps = normalizeApps(target.apps);
+      const key = apps.map((app) => app.toLowerCase()).join('|');
+      const current = key !== '' && key === currentKey;
+      const name = target.name || `Набор ${index + 1}`;
+      return `
+        <div class="target-set${current ? ' current' : ''}">
+          <div class="target-set-info">
+            <strong>${esc(name)}${current ? ' · активен' : ''}</strong>
+            <small>${esc(apps.join(', ') || 'Системная громкость')}</small>
+          </div>
+          <div class="target-set-actions">
+            <button class="mini accent" data-set-action="apply" data-index="${index}">Применить</button>
+            <button class="mini" data-set-action="delete" data-index="${index}">Удалить</button>
+          </div>
+        </div>`;
+    })
+    .join('');
+}
+
+async function saveTargetSet() {
+  const apps = state.target.apps || [];
+  if (!apps.length) {
+    toast('Сначала выберите приложения для ручки', 'error');
+    return;
+  }
+  const input = $('#target-set-name');
+  const name = input.value.trim() || apps.join(', ');
+  const targets = (Array.isArray(state.config.targets) ? state.config.targets : []).map(
+    (target) => ({ name: target.name, apps: normalizeApps(target.apps) })
+  );
+  const item = { name: name.slice(0, 60), apps };
+  const index = targets.findIndex(
+    (target) => String(target.name).toLowerCase() === item.name.toLowerCase()
+  );
+  if (index >= 0) targets[index] = item;
+  else targets.push(item);
+  try {
+    const data = await api('/api/targets', { method: 'POST', body: { targets } });
+    state.config = data.config;
+    state.configHash = JSON.stringify(data.config);
+    input.value = '';
+    renderTarget();
+    toast(`Набор «${item.name}» сохранён`);
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+async function deleteTargetSet(index) {
+  const targets = (Array.isArray(state.config.targets) ? state.config.targets : [])
+    .filter((_, position) => position !== index)
+    .map((target) => ({ name: target.name, apps: normalizeApps(target.apps) }));
+  try {
+    const data = await api('/api/targets', { method: 'POST', body: { targets } });
+    state.config = data.config;
+    state.configHash = JSON.stringify(data.config);
+    renderTarget();
+    toast('Набор удалён');
+  } catch (error) {
+    toast(error.message, 'error');
   }
 }
 
@@ -497,11 +625,11 @@ function renderApps() {
     container.innerHTML = `<div class="empty">${hint}</div>`;
     return;
   }
-  const targetApp = (state.target.app || '').toLowerCase();
+  const selected = new Set((state.target.apps || []).map((app) => app.toLowerCase()));
   container.innerHTML = state.apps
     .map((app) => {
       const initials = (app.title || app.app || '?').replace(/[^a-zA-Zа-яА-Я0-9]/g, '').slice(0, 2);
-      const current = targetApp && app.app.toLowerCase() === targetApp;
+      const current = selected.has(app.app.toLowerCase());
       return `
         <div class="app-row${current ? ' current' : ''}" data-app="${esc(app.app)}">
           <div class="app-info">
@@ -515,7 +643,7 @@ function renderApps() {
           <span class="app-percent">${app.volume}%</span>
           <div class="app-actions">
             <button class="mini${app.mute ? ' on' : ''}" data-action="mute">${app.mute ? 'Unmute' : 'Mute'}</button>
-            <button class="mini accent" data-action="target">Ручка</button>
+            <button class="mini${current ? ' on accent' : ' accent'}" data-action="pick">${current ? '✓ Ручка' : 'Ручка'}</button>
           </div>
         </div>`;
     })
@@ -594,16 +722,16 @@ function fieldHtml(type, action) {
   switch (type) {
     case 'volume':
       return `
-        <label class="field wide"><span>Приложение <small>пусто = система</small></span>
-          <input data-field="app" list="app-list" value="${esc(action.app || '')}" placeholder="chrome.exe" spellcheck="false"></label>
+        <label class="field wide"><span>Приложения <small>через запятую, пусто = система</small></span>
+          <input data-field="app" list="app-list" value="${esc(appsOf(action).join(', '))}" placeholder="chrome.exe, discord.exe" spellcheck="false"></label>
         <label class="field"><span>Шагов за щелчок</span>
           <input data-field="delta" type="number" step="1" value="${num(action.delta ?? 1, 1)}"></label>
         <label class="field"><span>Шаг, %</span>
           <input data-field="step" type="number" min="1" max="50" step="1" value="${num(action.step, 2)}"></label>`;
     case 'mute':
       return `
-        <label class="field wide"><span>Приложение <small>пусто = система</small></span>
-          <input data-field="app" list="app-list" value="${esc(action.app || '')}" placeholder="chrome.exe" spellcheck="false"></label>
+        <label class="field wide"><span>Приложения <small>через запятую, пусто = система</small></span>
+          <input data-field="app" list="app-list" value="${esc(appsOf(action).join(', '))}" placeholder="chrome.exe, discord.exe" spellcheck="false"></label>
         <label class="field"><span>Состояние</span>
           <select data-field="state">
             <option value="toggle"${stateName(action.state) === 'toggle' ? ' selected' : ''}>Переключать</option>
@@ -689,6 +817,13 @@ function collectAction(card) {
     } else {
       action[key] = raw;
     }
+  }
+  if (type === 'volume' || type === 'mute') {
+    const apps = normalizeApps(action.app);
+    delete action.app;
+    delete action.apps;
+    if (apps.length === 1) action.app = apps[0];
+    else if (apps.length > 1) action.apps = apps;
   }
   return action;
 }
@@ -1023,16 +1158,37 @@ function wire() {
         toast(error.message, 'error');
       }
     }
-    if (button.dataset.action === 'target') {
-      $('#target-app').value = appName;
-      $('#target-step').value = String(Math.min(10, Math.max(1, state.target.step || 2)));
-      $('#target-step-value').textContent = `${$('#target-step').value}%`;
-      paintRange($('#target-step'));
-      await applyTarget(appName);
+    if (button.dataset.action === 'pick') {
+      const selected = new Set((state.target.apps || []).map((entry) => entry));
+      if (selected.has(appName)) selected.delete(appName);
+      else selected.add(appName);
+      await applyTarget([...selected], { silent: true });
       switchTab('volume');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (!(state.target.apps || []).length) {
+        toast('Выберите хотя бы одно приложение или нажмите «Системная громкость»', 'error');
+      }
     }
   });
+
+  const targetSets = $('#target-sets');
+  if (targetSets) {
+    targetSets.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-set-action]');
+      if (!button) return;
+      const index = Number(button.dataset.index);
+      const targets = Array.isArray(state.config.targets) ? state.config.targets : [];
+      const target = targets[index];
+      if (button.dataset.setAction === 'apply' && target) {
+        await applyTarget(target.apps || []);
+      }
+      if (button.dataset.setAction === 'delete') {
+        await deleteTargetSet(index);
+      }
+    });
+  }
+
+  const targetSetAdd = $('#target-set-add');
+  if (targetSetAdd) targetSetAdd.addEventListener('click', saveTargetSet);
 
   $('#bindings-save').addEventListener('click', saveBindings);
   $('#bindings-reload').addEventListener('click', reloadBindings);
@@ -1107,6 +1263,13 @@ function wire() {
       saveSetting(name.replace(/-/g, '_'), element.checked);
     });
   });
+
+  const switchModifier = $('#opt-switch-modifier');
+  if (switchModifier) {
+    switchModifier.addEventListener('change', () => {
+      saveSetting('switch_modifier', switchModifier.value);
+    });
+  }
 
   const settingsQuit = $('#settings-quit');
   if (settingsQuit) {

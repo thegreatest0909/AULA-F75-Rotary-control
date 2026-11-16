@@ -2,7 +2,7 @@
 ; Собирается из packaging\build.ps1: ISCC packaging\installer.iss
 
 #define MyAppName "AULA F75 Knob"
-#define MyAppVersion "1.0.3"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "thegreatest0909"
 #define MyAppURL "https://github.com/thegreatest0909/AULA-F75-Rotary-control"
 #define MyAppExeName "AULA F75 Knob.exe"
