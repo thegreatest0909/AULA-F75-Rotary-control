@@ -405,6 +405,7 @@ class Controller:
         self._second_layer_vk = _modifier_vk(settings.second_layer_modifier)
         self._switch_vks = _switch_vks(settings.switch_modifier)
         self._last_switch = 0.0
+        self._last_switch_warn = 0.0
         self._events: queue.Queue[winhook.KeyEvent] = queue.Queue()
         self._action_queue: queue.Queue[tuple[str, Any] | None] = queue.Queue()
         self._hook: winhook.KeyboardHook | None = None
@@ -535,7 +536,12 @@ class Controller:
             return
         targets = self.settings.targets
         if len(targets) < 2:
-            self.log("Мало наборов целей: добавьте их в меню на вкладке «Громкость»", force=True)
+            if now - self._last_switch_warn > 5.0:
+                self._last_switch_warn = now
+                self.log(
+                    "Мало наборов целей: добавьте их в меню на вкладке «Громкость»",
+                    force=True,
+                )
             return
         current = _action_apps(self.settings.bindings.get("rotate_right"))
         index = -1

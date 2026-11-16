@@ -296,6 +296,20 @@ def _do_mute(action: dict[str, Any], log: Log) -> None:
 
     apps = _app_list(action)
     if apps:
+        if state is None and len(apps) > 1:
+            # Переключаем все приложения в одно состояние, а не каждое
+            # относительно его собственного: иначе часть включится, часть
+            # выключится.
+            try:
+                muted = {
+                    str(item.get("app", "")).strip().lower(): bool(item.get("mute"))
+                    for item in audio.list_apps()
+                }
+                first = apps[0].strip().lower()
+                if first in muted:
+                    state = not muted[first]
+            except Exception:  # noqa: BLE001 - не мешает самому переключению
+                state = None
         changes: list[str] = []
         active = 0
         for app in apps:

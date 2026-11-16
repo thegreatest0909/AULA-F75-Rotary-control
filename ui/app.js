@@ -643,7 +643,7 @@ function renderApps() {
           <span class="app-percent">${app.volume}%</span>
           <div class="app-actions">
             <button class="mini${app.mute ? ' on' : ''}" data-action="mute">${app.mute ? 'Unmute' : 'Mute'}</button>
-            <button class="mini${current ? ' on accent' : ' accent'}" data-action="pick">${current ? '✓ Ручка' : 'Ручка'}</button>
+            <button class="mini accent" data-action="pick">${current ? '✓ Ручка' : 'Ручка'}</button>
           </div>
         </div>`;
     })
@@ -1165,7 +1165,7 @@ function wire() {
       await applyTarget([...selected], { silent: true });
       switchTab('volume');
       if (!(state.target.apps || []).length) {
-        toast('Выберите хотя бы одно приложение или нажмите «Системная громкость»', 'error');
+        toast('Выбрана системная громкость');
       }
     }
   });
